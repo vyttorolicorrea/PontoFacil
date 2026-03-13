@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PontoFácil</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0c10;--surface:#111318;--surface2:#181c24;--border:#252a35;
+    --accent:#00e5ff;--accent2:#ff3d5a;--accent3:#ffd600;
+    --ok:#00e676;--warn:#ff9100;--text:#e8eaf0;--muted:#5c6370;
+    --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
+
+  /* ── HEADER ── */
+  header{padding:16px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1000;background:rgba(10,12,16,0.97);backdrop-filter:blur(8px)}
+  .logo{display:flex;align-items:center;gap:11px}
+  .logo-mark{width:32px;height:32px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:600;font-size:12px;color:#000}
+  .logo-text{font-size:16px;font-weight:700;letter-spacing:-0.5px}
+  .logo-text span{color:var(--accent)}
+  .header-right{display:flex;align-items:center;gap:14px}
+  .header-user{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right;line-height:1.7;display:none}
+  .header-user strong{color:var(--text);display:block}
+  .role-tag{font-size:9px;font-family:var(--mono);padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:1px;display:none}
+  .tag-admin{background:rgba(255,61,90,0.15);color:var(--accent2);border:1px solid rgba(255,61,90,0.3)}
+  .tag-viewer{background:rgba(0,229,255,0.1);color:var(--accent);border:1px solid rgba(0,229,255,0.2)}
+  .logout-btn{padding:5px 12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;font-family:var(--mono);cursor:pointer;transition:all 0.2s;display:none}
+  .logout-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+
+  /* ── SCREENS ── */
+  .screen{display:none;min-height:calc(100vh - 65px)}
+
+  /* LOGIN */
+  #screen-login{display:flex;align-items:center;justify-content:center;padding:40px}
+  .login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:44px;width:100%;max-width:380px}
+  .login-box h2{font-size:22px;font-weight:700;letter-spacing:-0.5px;margin-bottom:6px}
+  .login-box p{font-size:12px;color:var(--muted);margin-bottom:28px}
+  .form-group{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+  .form-group label{font-size:10px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+  .form-input{padding:11px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color 0.2s;width:100%}
+  .form-input:focus{border-color:var(--accent)}
+  .login-btn{width:100%;padding:12px;background:var(--accent);color:#000;font-size:13px;font-weight:700;font-family:var(--sans);border:none;border-radius:8px;cursor:pointer;margin-top:8px;transition:all 0.2s}
+  .login-btn:hover{background:#fff}
+  .login-error{font-size:11px;color:var(--accent2);font-family:var(--mono);margin-top:8px;display:none;text-align:center}
+
+  /* UPLOAD (admin) */
+  #screen-upload{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;gap:28px}
+  .section-title{text-align:center}
+  .section-title h2{font-size:22px;font-weight:700;letter-spacing:-1px;margin-bottom:6px}
+  .section-title p{color:var(--muted);font-size:13px}
+  .upload-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;width:100%;max-width:820px}
+  .upload-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:9px;position:relative;overflow:hidden}
+  .upload-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--border);transition:background 0.2s}
+  .upload-card.ready::before{background:var(--ok)}
+  .uc-label{font-size:10px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+  .uc-title{font-size:13px;font-weight:600}
+  .uc-desc{font-size:11px;color:var(--muted);line-height:1.5}
+  .file-btn{display:block;width:100%;padding:9px;background:var(--surface2);border:1px dashed var(--border);border-radius:7px;color:var(--muted);font-size:11px;font-family:var(--mono);cursor:pointer;text-align:center;transition:all 0.2s}
+  .file-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .file-btn.loaded{border-color:var(--ok);color:var(--ok);border-style:solid}
+  input[type="file"]{display:none}
+  .process-btn{padding:12px 44px;background:var(--accent);color:#000;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer;transition:all 0.2s;opacity:0.3;pointer-events:none}
+  .process-btn.active{opacity:1;pointer-events:all}
+  .process-btn.active:hover{background:#fff;transform:translateY(-1px)}
+  .process-status{font-family:var(--mono);font-size:12px;color:var(--muted);min-height:18px;text-align:center}
+  .process-status.ok{color:var(--ok)}
+  .process-status.err{color:var(--accent2)}
+
+  /* WAITING (viewer, no data) */
+  #screen-waiting{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--muted)}
+  .waiting-icon{font-size:52px;opacity:0.2}
+  .waiting-title{font-size:17px;font-weight:600;color:var(--text)}
+  .waiting-sub{font-size:13px}
+  .waiting-retry{padding:8px 20px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;font-family:var(--mono);cursor:pointer;margin-top:8px;transition:all 0.2s}
+  .waiting-retry:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* DASHBOARD */
+  #screen-dashboard{display:flex;flex-direction:column}
+  .stats-bar{display:flex;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto}
+  .stat-item{padding:12px 22px;border-right:1px solid var(--border);white-space:nowrap}
+  .stat-label{font-size:10px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+  .stat-value{font-size:19px;font-weight:700;font-family:var(--mono)}
+  .sv-ok{color:var(--ok)}.sv-err{color:var(--accent2)}.sv-warn{color:var(--warn)}.sv-info{color:var(--accent)}.sv-muted{color:var(--muted)}
+
+  .filter-bar{display:flex;align-items:center;gap:7px;padding:9px 20px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .filter-label{font-size:10px;font-family:var(--mono);color:var(--muted)}
+  .filter-btn{padding:4px 11px;border-radius:20px;font-size:10px;font-family:var(--mono);border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all 0.15s}
+  .filter-btn:hover,.filter-btn.active{background:var(--accent);color:#000;border-color:var(--accent)}
+  .filter-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .search-input{padding:5px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:11px;width:190px;outline:none;transition:border-color 0.2s}
+  .search-input:focus{border-color:var(--accent)}
+  .icon-btn{padding:5px 11px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;font-family:var(--mono);cursor:pointer;transition:all 0.2s;white-space:nowrap}
+  .icon-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .icon-btn.danger:hover{border-color:var(--accent2);color:var(--accent2)}
+
+  .cards-container{padding:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(500px,1fr));gap:13px;flex:1}
+
+  /* CARD */
+  .tech-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color 0.2s,box-shadow 0.2s}
+  .tech-card:hover{border-color:#333a48;box-shadow:0 4px 20px rgba(0,0,0,0.4)}
+  .tech-card.s-ok{border-left:3px solid var(--ok)}
+  .tech-card.s-late{border-left:3px solid var(--accent2)}
+  .tech-card.s-warn{border-left:3px solid var(--warn)}
+  .tech-card.s-ajustado{border-left:3px solid var(--accent3)}
+  .tech-card.s-early{border-left:3px solid var(--accent)}
+  .tech-card.s-no-service{border-left:3px solid var(--muted)}
+
+  .card-header{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;background:var(--surface2);border-bottom:1px solid var(--border)}
+  .card-name{font-size:12px;font-weight:600}
+  .card-badges{display:flex;gap:5px}
+  .badge{padding:2px 7px;border-radius:4px;font-size:9px;font-family:var(--mono);font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
+  .b-ok{background:rgba(0,230,118,0.12);color:var(--ok)}
+  .b-err{background:rgba(255,61,90,0.12);color:var(--accent2)}
+  .b-warn{background:rgba(255,145,0,0.12);color:var(--warn)}
+  .b-adj{background:rgba(255,214,0,0.12);color:var(--accent3)}
+  .b-inf{background:rgba(0,229,255,0.12);color:var(--accent)}
+  .b-muted{background:rgba(92,99,112,0.15);color:var(--muted)}
+
+  .card-body{display:grid;grid-template-columns:88px 1fr 1fr}
+  .card-photo{border-right:1px solid var(--border);background:#0d0f14;display:flex;align-items:stretch;min-height:120px}
+  .card-photo img{width:88px;min-height:120px;max-height:170px;object-fit:cover;display:block}
+  .no-photo{width:88px;min-height:120px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;font-family:var(--mono);text-align:center;padding:8px}
+  .card-panel{padding:11px 12px;border-right:1px solid var(--border)}
+  .card-panel:last-child{border-right:none}
+  .panel-title{font-size:9px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+  .panel-title::before{content:'';display:inline-block;width:5px;height:5px;border-radius:50%}
+  .pt-ponto::before{background:var(--accent)}
+  .pt-serv::before{background:var(--accent3)}
+  .info-row{margin-bottom:6px}
+  .info-key{font-size:9px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:1px}
+  .info-val{font-size:11px;color:var(--text);line-height:1.4}
+  .iv-big{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--accent)}
+  .iv-big2{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--accent3)}
+  .iv-late{font-family:var(--mono);font-weight:600;color:var(--accent2)}
+  .iv-early{font-family:var(--mono);font-weight:600;color:var(--warn)}
+  .iv-ok{font-family:var(--mono);font-weight:600;color:var(--ok)}
+  .iv-sm{font-size:10px;color:var(--muted);line-height:1.4}
+
+  .card-map{border-top:1px solid var(--border);height:150px;position:relative}
+  .map-div{width:100%;height:100%}
+  .map-overlay{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:500}
+  .map-legend{position:absolute;bottom:7px;left:7px;display:flex;gap:6px}
+  .map-dot{display:flex;align-items:center;gap:4px;background:rgba(10,12,16,0.88);padding:2px 6px;border-radius:3px;font-size:9px;font-family:var(--mono)}
+  .dc-blue{width:7px;height:7px;border-radius:50%;background:#4fc3f7;flex-shrink:0}
+  .dc-red{width:7px;height:7px;border-radius:50%;background:var(--accent2);flex-shrink:0}
+  .dist-badge{position:absolute;top:7px;right:7px;background:rgba(10,12,16,0.9);border:1px solid var(--border);padding:3px 8px;border-radius:3px;font-size:10px;font-family:var(--mono)}
+
+  .leaflet-container{background:#1a1e28!important}
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px;grid-column:1/-1;color:var(--muted);gap:10px}
+
+  /* PROCESSED INFO BAR */
+  .processed-bar{padding:7px 20px;background:rgba(0,230,118,0.06);border-bottom:1px solid rgba(0,230,118,0.15);font-size:11px;font-family:var(--mono);color:var(--ok);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  .pb-admin-actions{display:flex;gap:8px}
+
+  ::-webkit-scrollbar{width:5px;height:5px}
+  ::-webkit-scrollbar-track{background:var(--bg)}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+  @media(max-width:700px){
+    .upload-grid{grid-template-columns:1fr}
+    .cards-container{grid-template-columns:1fr;padding:10px}
+    .card-body{grid-template-columns:80px 1fr}
+    .card-body .card-panel:last-child{grid-column:2}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">PF</div>
+    <div class="logo-text">Ponto<span>Fácil</span></div>
+  </div>
+  <div class="header-right">
+    <span class="role-tag" id="role-tag"></span>
+    <div class="header-user" id="header-user">
+      <strong id="user-name-display"></strong>
+      Auditoria de Entrada
+    </div>
+    <button class="logout-btn" id="logout-btn" onclick="doLogout()">Sair</button>
+  </div>
+</header>
+
+<!-- ══ LOGIN ══ -->
+<div id="screen-login" class="screen" style="display:flex">
+  <div class="login-box">
+    <h2>PontoFácil</h2>
+    <p>Acesso restrito. Insira suas credenciais.</p>
+    <div class="form-group">
+      <label>Usuário</label>
+      <input class="form-input" type="text" id="login-user" placeholder="seu.usuario" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Senha</label>
+      <input class="form-input" type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" onclick="doLogin()">Entrar →</button>
+    <div class="login-error" id="login-error">Usuário ou senha incorretos.</div>
+  </div>
+</div>
+
+<!-- ══ UPLOAD (admin) ══ -->
+<div id="screen-upload" class="screen">
+  <div class="section-title">
+    <h2>Importar Relatórios</h2>
+    <p>Exporte os três arquivos e faça upload abaixo. Os dados ficam disponíveis para toda a equipe.</p>
+  </div>
+  <div class="upload-grid">
+    <div class="upload-card" id="card-pm">
+      <div class="uc-label">01 / PontoMais</div>
+      <div class="uc-title">Relatório de Ponto</div>
+      <div class="uc-desc">Exportação bruta — horários, fotos e geolocalização dos batimentos</div>
+      <label class="file-btn" id="btn-pm">📂 Selecionar .xlsx<input type="file" id="file-pm" accept=".xlsx,.xls"></label>
+    </div>
+    <div class="upload-card" id="card-prod">
+      <div class="uc-label">02 / Produção</div>
+      <div class="uc-title">Produção × PontoMais</div>
+      <div class="uc-desc">Relatório consolidado — ignição, pontos batidos e status</div>
+      <label class="file-btn" id="btn-prod">📂 Selecionar .xlsx<input type="file" id="file-prod" accept=".xlsx,.xls"></label>
+    </div>
+    <div class="upload-card" id="card-serv">
+      <div class="uc-label">03 / Serviços</div>
+      <div class="uc-title">Relatório ETA / Oracle</div>
+      <div class="uc-desc">Exportação do sistema de despacho — coordenadas do 1º serviço</div>
+      <label class="file-btn" id="btn-serv">📂 Selecionar .xlsx<input type="file" id="file-serv" accept=".xlsx,.xls"></label>
+    </div>
+  </div>
+  <button class="process-btn" id="process-btn" onclick="doUpload()">Processar e Publicar para Equipe →</button>
+  <div class="process-status" id="process-status"></div>
+</div>
+
+<!-- ══ WAITING (viewer) ══ -->
+<div id="screen-waiting" class="screen">
+  <div class="waiting-icon">📋</div>
+  <div class="waiting-title">Aguardando relatório do dia</div>
+  <div class="waiting-sub">O administrador ainda não processou os arquivos de hoje.</div>
+  <button class="waiting-retry" onclick="checkData()">↻ Verificar novamente</button>
+</div>
+
+<!-- ══ DASHBOARD ══ -->
+<div id="screen-dashboard" class="screen">
+  <div class="stats-bar" id="stats-bar"></div>
+  <div class="processed-bar" id="processed-bar" style="display:none">
+    <span id="processed-info"></span>
+    <div class="pb-admin-actions" id="admin-actions" style="display:none">
+      <button class="icon-btn" onclick="showUpload()">⬆ Novo relatório</button>
+    </div>
+  </div>
+  <div class="filter-bar">
+    <span class="filter-label">Filtrar:</span>
+    <button class="filter-btn active" onclick="setFilter('all',this)">Todos</button>
+    <button class="filter-btn" onclick="setFilter('late',this)">⚠ Atrasado</button>
+    <button class="filter-btn" onclick="setFilter('warn',this)">📍 Suspeito</button>
+    <button class="filter-btn" onclick="setFilter('ajustado',this)">✎ Ajustado</button>
+    <button class="filter-btn" onclick="setFilter('early',this)">⚡ Antecipado</button>
+    <button class="filter-btn" onclick="setFilter('ok',this)">✓ OK</button>
+    <button class="filter-btn" onclick="setFilter('no-service',this)">? Sem serviço</button>
+    <div class="filter-right">
+      <input class="search-input" type="text" placeholder="Buscar técnico..." oninput="searchTechs(this.value)">
+    </div>
+  </div>
+  <div class="cards-container" id="cards-container"></div>
+</div>
+
+<script>
+let allData=[], currentFilter='all', currentSearch='', leafletMaps={};
+let currentRole = null;
+
+// ── BOOT ─────────────────────────────────────────────────────
+async function boot() {
+  const res = await fetch('/api/me');
+  const me  = await res.json();
+  if (!me.loggedIn) { showScreen('login'); return; }
+  setUserUI(me);
+  await checkData();
+}
+
+function setUserUI(me) {
+  currentRole = me.role;
+  document.getElementById('user-name-display').textContent = me.name;
+  document.getElementById('header-user').style.display = 'block';
+  document.getElementById('logout-btn').style.display   = 'block';
+  const tag = document.getElementById('role-tag');
+  tag.style.display = 'inline';
+  if (me.role === 'admin') {
+    tag.className = 'role-tag tag-admin'; tag.textContent = 'Admin';
+    document.getElementById('admin-actions').style.display = 'flex';
+  } else {
+    tag.className = 'role-tag tag-viewer'; tag.textContent = 'Visualizador';
+  }
+}
+
+async function checkData() {
+  const res  = await fetch('/api/data');
+  const body = await res.json();
+  if (body.ready) {
+    allData = body.data;
+    showDashboard(body.processedAt);
+  } else {
+    if (currentRole === 'admin') showScreen('upload');
+    else showScreen('waiting');
+  }
+}
+
+// ── LOGIN / LOGOUT ────────────────────────────────────────────
+async function doLogin() {
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value;
+  const err      = document.getElementById('login-error');
+  err.style.display = 'none';
+  const res  = await fetch('/api/login', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username, password})
+  });
+  const body = await res.json();
+  if (!res.ok) { err.style.display='block'; return; }
+  setUserUI(body);
+  await checkData();
+}
+
+async function doLogout() {
+  await fetch('/api/logout', {method:'POST'});
+  currentRole = null;
+  document.getElementById('header-user').style.display = 'none';
+  document.getElementById('logout-btn').style.display  = 'none';
+  document.getElementById('role-tag').style.display    = 'none';
+  document.getElementById('login-user').value = '';
+  document.getElementById('login-pass').value = '';
+  showScreen('login');
+}
+
+// ── UPLOAD ───────────────────────────────────────────────────
+const fileMap = { pm:'pontomais', prod:'producao', serv:'servicos' };
+
+['pm','prod','serv'].forEach(key=>{
+  document.getElementById('file-'+key).addEventListener('change',function(e){
+    if(!e.target.files[0])return;
+    const btn=document.getElementById('btn-'+key);
+    btn.classList.add('loaded');
+    const n=e.target.files[0].name;
+    btn.childNodes[0].textContent='✓ '+(n.length>26?n.slice(0,24)+'…':n);
+    document.getElementById('card-'+key).classList.add('ready');
+    const allReady=['pm','prod','serv'].every(k=>document.getElementById('file-'+k).files[0]);
+    if(allReady) document.getElementById('process-btn').classList.add('active');
+  });
+});
+
+async function doUpload() {
+  const status = document.getElementById('process-status');
+  status.className = 'process-status';
+  status.textContent = 'Enviando arquivos…';
+  const btn = document.getElementById('process-btn');
+  btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none';
+
+  const form = new FormData();
+  form.append('pontomais', document.getElementById('file-pm').files[0]);
+  form.append('producao',  document.getElementById('file-prod').files[0]);
+  form.append('servicos',  document.getElementById('file-serv').files[0]);
+
+  try {
+    const res  = await fetch('/api/process', { method:'POST', body: form });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error);
+    status.className = 'process-status ok';
+    status.textContent = `✓ ${body.count} técnicos processados. Publicando dashboard…`;
+    await new Promise(r=>setTimeout(r,800));
+    await checkData();
+  } catch(err) {
+    status.className = 'process-status err';
+    status.textContent = '✗ ' + err.message;
+    btn.style.opacity = ''; btn.style.pointerEvents = '';
+  }
+}
+
+function showUpload() {
+  // Reset upload form
+  ['pm','prod','serv'].forEach(k=>{
+    const btn=document.getElementById('btn-'+k);
+    btn.classList.remove('loaded');
+    btn.childNodes[0].textContent='📂 Selecionar .xlsx';
+    document.getElementById('card-'+k).classList.remove('ready');
+    document.getElementById('file-'+k).value='';
+  });
+  const pb=document.getElementById('process-btn');
+  pb.textContent='Processar e Publicar para Equipe →';
+  pb.style.opacity='0.3'; pb.style.pointerEvents='none'; pb.classList.remove('active');
+  document.getElementById('process-status').textContent='';
+  showScreen('upload');
+}
+
+// ── DASHBOARD ────────────────────────────────────────────────
+function showDashboard(processedAt) {
+  showScreen('dashboard');
+  const bar = document.getElementById('processed-bar');
+  const info = document.getElementById('processed-info');
+  if (processedAt) {
+    const d = new Date(processedAt);
+    bar.style.display='flex';
+    info.textContent = `✓ Relatório processado em ${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${allData.length} técnicos`;
+  }
+  renderStats(); renderCards();
+}
+
+function renderStats(){
+  const cnt={ok:0,late:0,warn:0,ajustado:0,early:0,'no-service':0};
+  allData.forEach(d=>cnt[d.cardStatus]=(cnt[d.cardStatus]||0)+1);
+  document.getElementById('stats-bar').innerHTML=`
+    <div class="stat-item"><div class="stat-label">Total</div><div class="stat-value sv-info">${allData.length}</div></div>
+    <div class="stat-item"><div class="stat-label">OK</div><div class="stat-value sv-ok">${cnt.ok}</div></div>
+    <div class="stat-item"><div class="stat-label">Atrasados</div><div class="stat-value sv-err">${cnt.late}</div></div>
+    <div class="stat-item"><div class="stat-label">Local suspeito</div><div class="stat-value sv-warn">${cnt.warn}</div></div>
+    <div class="stat-item"><div class="stat-label">Ajustado</div><div class="stat-value" style="color:var(--accent3)">${cnt.ajustado}</div></div>
+    <div class="stat-item"><div class="stat-label">Sem serviço</div><div class="stat-value sv-muted">${cnt['no-service']}</div></div>`;
+}
+
+function setFilter(f,el){
+  currentFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active'); renderCards();
+}
+function searchTechs(v){currentSearch=v.toLowerCase();renderCards();}
+
+function renderCards(){
+  Object.values(leafletMaps).forEach(m=>{try{m.remove();}catch(e){}});
+  leafletMaps={};
+  let data=allData;
+  if(currentFilter!=='all')data=data.filter(d=>d.cardStatus===currentFilter);
+  if(currentSearch)data=data.filter(d=>d.nome.toLowerCase().includes(currentSearch));
+  const c=document.getElementById('cards-container');
+  if(!data.length){c.innerHTML='<div class="empty-state"><div style="font-size:40px;opacity:0.3">🔍</div><div>Nenhum técnico encontrado</div></div>';return;}
+  c.innerHTML=data.map((d,i)=>buildCardHTML(d,i)).join('');
+  requestAnimationFrame(()=>data.forEach((d,i)=>{if(d.pontLat&&d.pontLng)initMap(d,i);}));
+}
+
+const statusDefs={
+  ok:['b-ok','✓ OK'],late:['b-err','⚠ ATRASADO'],warn:['b-warn','📍 SUSPEITO'],
+  ajustado:['b-adj','✎ AJUSTADO'],early:['b-inf','⚡ ANTECIPADO'],'no-service':['b-muted','? SEM SERVIÇO']
+};
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function fmtDelta(m){if(m==null)return'—';const h=Math.floor(Math.abs(m)/60),mn=Math.abs(m)%60,s=m>=0?'+':'-';return h>0?`${s}${h}h${String(mn).padStart(2,'0')}m`:`${s}${mn}min`;}
+function fmtDist(d){if(d==null)return'—';return d<1000?Math.round(d)+'m':(d/1000).toFixed(1)+'km';}
+
+function buildCardHTML(d,i){
+  const[bCls,bLbl]=statusDefs[d.cardStatus]||['b-muted',d.cardStatus];
+  const parts=d.nome.split(' '),shortName=parts[0]+' '+parts[parts.length-1];
+  const deltaStr=fmtDelta(d.timeDelta);
+  const deltaCls=d.timeDelta==null?'':d.timeDelta>10?'iv-late':d.timeDelta<-5?'iv-early':'iv-ok';
+  const distStr=fmtDist(d.distanceM);
+  const distStyle=d.distanceM==null?'':d.distanceM>500?'color:var(--accent2)':d.distanceM>200?'color:var(--warn)':'color:var(--ok)';
+  const ignStr=d.ignitionOn?String(d.ignitionOn).substring(0,5):'—';
+  const photoHtml=d.foto
+    ?`<img src="${esc(d.foto)}" alt="" style="opacity:0;transition:opacity 0.4s" onload="this.style.opacity=1" onerror="this.outerHTML='<div class=&quot;no-photo&quot;>Sem<br>foto</div>'">`
+    :`<div class="no-photo">Sem<br>foto</div>`;
+  const mapHtml=d.pontLat?`
+    <div class="card-map">
+      <div class="map-div" id="map-${i}"></div>
+      <div class="map-overlay">
+        <div class="map-legend">
+          <div class="map-dot"><div class="dc-blue"></div>Ponto</div>
+          ${d.servLat?'<div class="map-dot"><div class="dc-red"></div>1º serviço</div>':''}
+        </div>
+        ${d.distanceM!=null?`<div class="dist-badge" style="${distStyle}">📏 ${distStr}</div>`:''}
+      </div>
+    </div>`:'';
+  return`<div class="tech-card s-${d.cardStatus}">
+    <div class="card-header">
+      <div class="card-name">${esc(shortName)}</div>
+      <div class="card-badges">
+        ${d.puntoAjustado?'<span class="badge b-adj">AJUSTADO</span>':''}
+        <span class="badge ${bCls}">${bLbl}</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-photo">${photoHtml}</div>
+      <div class="card-panel">
+        <div class="panel-title pt-ponto">Batimento de Ponto</div>
+        <div class="info-row"><div class="info-key">Horário</div><div class="info-val iv-big">${esc(d.puntoHora||'—')}</div></div>
+        <div class="info-row"><div class="info-key">Δ vs 08:30</div><div class="info-val ${deltaCls}">${deltaStr}</div></div>
+        <div class="info-row"><div class="info-key">Ignição ON</div><div class="info-val" style="font-family:var(--mono)">${ignStr}</div></div>
+        <div class="info-row"><div class="info-key">Endereço</div><div class="info-val iv-sm">${esc(d.puntoEnd||'—')}</div></div>
+      </div>
+      <div class="card-panel">
+        <div class="panel-title pt-serv">1º Serviço</div>
+        <div class="info-row"><div class="info-key">Início previsto</div><div class="info-val iv-big2">${esc(d.servHora||'—')}</div></div>
+        <div class="info-row"><div class="info-key">Distância</div><div class="info-val" style="font-family:var(--mono);font-weight:600;${distStyle}">${distStr}</div></div>
+        <div class="info-row"><div class="info-key">Tipo</div><div class="info-val iv-sm">${esc(d.servTipo||'—')}</div></div>
+        <div class="info-row"><div class="info-key">Endereço</div><div class="info-val iv-sm">${esc(d.servEnd||'—')}</div></div>
+      </div>
+    </div>
+    ${mapHtml}
+  </div>`;
+}
+
+function initMap(d,i){
+  const el=document.getElementById('map-'+i);
+  if(!el||leafletMaps[i])return;
+  const cLat=d.servLat?(d.pontLat+d.servLat)/2:d.pontLat;
+  const cLng=d.servLng?(d.pontLng+d.servLng)/2:d.pontLng;
+  const zoom=d.distanceM&&d.distanceM>1000?13:15;
+  const map=L.map(el,{zoomControl:false,attributionControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,keyboard:false}).setView([cLat,cLng],zoom);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+  L.circleMarker([d.pontLat,d.pontLng],{radius:8,color:'#4fc3f7',fillColor:'#4fc3f7',fillOpacity:0.95,weight:2}).addTo(map);
+  if(d.servLat&&d.servLng){
+    L.circleMarker([d.servLat,d.servLng],{radius:8,color:'#ff3d5a',fillColor:'#ff3d5a',fillOpacity:0.95,weight:2}).addTo(map);
+    L.polyline([[d.pontLat,d.pontLng],[d.servLat,d.servLng]],{color:'rgba(255,255,255,0.25)',weight:1.5,dashArray:'5,5'}).addTo(map);
+  }
+  leafletMaps[i]=map;
+}
+
+// ── NAV ──────────────────────────────────────────────────────
+function showScreen(name){
+  ['login','upload','waiting','dashboard'].forEach(s=>{
+    document.getElementById('screen-'+s).style.display='none';
+  });
+  const el=document.getElementById('screen-'+name);
+  el.style.display=name==='dashboard'?'flex':name==='waiting'?'flex':'flex';
+}
+
+boot();
+</script>
+</body>
+</html>
