@@ -444,6 +444,9 @@ async function doLogin(){
 async function doLogout(){
   await fetch('/api/logout',{method:'POST'});currentRole=null;adminBtnAdded=false;availableDates=[];allTechs=[];
   ['header-user','logout-btn','role-tag'].forEach(id=>document.getElementById(id).style.display='none');
+  // Remove admin button from DOM so it doesn't show to next user
+  const adminBtn=document.querySelector('#toolbar-right .nav-btn');
+  if(adminBtn)adminBtn.remove();
   document.getElementById('login-user').value='';document.getElementById('login-pass').value='';
   showScreen('login');
 }
@@ -713,14 +716,38 @@ async function approveUser(id){await fetch('/api/approve-user/'+id,{method:'POST
 async function rejectUser(id){if(!confirm('Rejeitar esta solicitação?'))return;await fetch('/api/pending-user/'+id,{method:'DELETE'});await renderAdminPending();}
 
 async function renderAdminUsers(){
-  const res=await fetch('/api/users');const body=await res.json();
-  const c=document.getElementById('admin-content');
-  if(!body.users.length){c.innerHTML='<h3>Usuários ativos</h3><p class="sub">Todos os usuários com acesso ao sistema.</p><div class="empty-msg">Nenhum usuário cadastrado via app ainda.</div>';return;}
-  let html=`<h3>Usuários ativos</h3><p class="sub">Usuários aprovados com acesso ao sistema.</p><div class="table-wrap"><table class="data-table"><thead><tr><th>Nome</th><th>Cargo</th><th>ID Tel</th><th>E-mail</th><th>Ação</th></tr></thead><tbody>`;
-  body.users.forEach(u=>{
-    html+=`<tr><td>${esc(u.name)}</td><td>${esc(u.cargo)}</td><td style="font-family:var(--mono)">${esc(u.telId)}</td><td>${esc(u.email)}</td><td><button class="action-btn btn-del" onclick="removeUser(${u.id})">Remover</button></td></tr>`;
+  const [uRes, sRes] = await Promise.all([fetch('/api/users'), fetch('/api/all-supervisors')]);
+  const uBody = await uRes.json();
+  const sBody = await sRes.json();
+  const allSups = sBody.supervisors || [];
+  const c = document.getElementById('admin-content');
+  if(!uBody.users.length){
+    c.innerHTML='<h3>Usuários ativos</h3><p class="sub">Usuários aprovados com acesso ao sistema.</p><div class="empty-msg">Nenhum usuário cadastrado via app ainda.</div>';return;
+  }
+  let html=`<h3>Usuários ativos</h3>
+    <p class="sub">Defina quais supervisores cada usuário pode visualizar. Sem nenhum selecionado = acesso negado.</p>
+    <div class="table-wrap"><table class="data-table">
+    <thead><tr><th>Nome</th><th>Cargo</th><th>ID Tel</th><th>E-mail</th><th>Acesso a supervisores</th><th>Ação</th></tr></thead><tbody>`;
+  uBody.users.forEach(u=>{
+    const allowed = u.allowedSupervisors || [];
+    const supOptions = allSups.length
+      ? allSups.map(s=>`<label style="display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:11px;cursor:pointer"><input type="checkbox" data-uid="${u.id}" data-sup="${esc(s)}" ${allowed.includes(s)?'checked':''} onchange="saveSupervisors(${u.id})"> ${esc(s.split(' ').slice(0,2).join(' '))}</label>`).join('')
+      : '<span style="font-size:11px;color:var(--muted)">Nenhum supervisor carregado ainda</span>';
+    html+=`<tr>
+      <td>${esc(u.name)}</td>
+      <td>${esc(u.cargo)}</td>
+      <td style="font-family:var(--mono);font-size:12px">${esc(u.telId)}</td>
+      <td style="font-size:12px">${esc(u.email)}</td>
+      <td><div style="display:flex;flex-direction:column;gap:4px">${supOptions}</div></td>
+      <td><button class="action-btn btn-del" onclick="removeUser(${u.id})">Remover</button></td>
+    </tr>`;
   });
   html+=`</tbody></table></div>`;c.innerHTML=html;
+}
+async function saveSupervisors(uid){
+  const checkboxes=document.querySelectorAll(`input[data-uid="${uid}"]`);
+  const supervisors=[...checkboxes].filter(c=>c.checked).map(c=>c.getAttribute('data-sup'));
+  await fetch('/api/user/'+uid+'/supervisors',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({supervisors})});
 }
 async function removeUser(id){if(!confirm('Remover este usuário?'))return;await fetch('/api/user/'+id,{method:'DELETE'});await renderAdminUsers();}
 

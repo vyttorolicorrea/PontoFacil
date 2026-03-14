@@ -54,7 +54,9 @@ app.post('/api/logout', (req,res) => { req.session.destroy(()=>res.json({ok:true
 
 app.get('/api/me', (req,res) => {
   if (!req.session.userId) return res.json({loggedIn:false});
-  res.json({ loggedIn:true, name:req.session.userName, role:req.session.role });
+  const user = allUsers().find(u=>u.id===req.session.userId);
+  const allowedSupervisors = (user && user.allowedSupervisors) ? user.allowedSupervisors : [];
+  res.json({ loggedIn:true, name:req.session.userName, role:req.session.role, allowedSupervisors });
 });
 
 // ── Registro (primeiro acesso) ────────────────────────────────
@@ -108,7 +110,25 @@ app.delete('/api/pending-user/:id', requireAuth, requireAdmin, (req,res) => {
 
 // Lista usuários aprovados
 app.get('/api/users', requireAuth, requireAdmin, (req,res) => {
-  res.json({ users: dynamicUsers.map(u=>({id:u.id,name:u.name,telId:u.telId,cargo:u.cargo,email:u.email,role:u.role})) });
+  res.json({ users: dynamicUsers.map(u=>({id:u.id,name:u.name,telId:u.telId,cargo:u.cargo,email:u.email,role:u.role,allowedSupervisors:u.allowedSupervisors||[]})) });
+});
+
+// Update allowed supervisors for a user
+app.put('/api/user/:id/supervisors', requireAuth, requireAdmin, (req,res) => {
+  const id  = parseInt(req.params.id);
+  const idx = dynamicUsers.findIndex(u=>u.id===id);
+  if (idx===-1) return res.status(404).json({error:'Não encontrado'});
+  const { supervisors } = req.body; // array of supervisor names
+  if (!Array.isArray(supervisors)) return res.status(400).json({error:'supervisors deve ser array'});
+  dynamicUsers[idx].allowedSupervisors = supervisors;
+  res.json({ ok:true });
+});
+
+// Get all known supervisors across all loaded dates
+app.get('/api/all-supervisors', requireAuth, requireAdmin, (req,res) => {
+  const set = new Set();
+  Object.values(dataByDate).forEach(entry => entry.supervisors.forEach(s=>set.add(s)));
+  res.json({ supervisors: [...set].sort() });
 });
 
 app.delete('/api/user/:id', requireAuth, requireAdmin, (req,res) => {
@@ -130,7 +150,19 @@ app.get('/api/data', requireAuth, (req,res) => {
   const date  = req.query.date || (dates.length?dates[0]:null);
   if (!date||!dataByDate[date]) return res.json({ready:false});
   const entry = dataByDate[date];
-  res.json({ ready:true, date, techs:entry.techs, supervisors:entry.supervisors, processedAt:entry.processedAt });
+
+  // Filter techs by user's allowed supervisors (admin sees all)
+  const user = allUsers().find(u=>u.id===req.session.userId);
+  const allowed = (user && user.allowedSupervisors && user.allowedSupervisors.length)
+    ? user.allowedSupervisors : null;
+  const techs = allowed
+    ? entry.techs.filter(t => allowed.includes(t.supervisor))
+    : entry.techs;
+  const supervisors = allowed
+    ? entry.supervisors.filter(s => allowed.includes(s))
+    : entry.supervisors;
+
+  res.json({ ready:true, date, techs, supervisors, processedAt:entry.processedAt });
 });
 
 // Listar todos os dados (para painel admin)
