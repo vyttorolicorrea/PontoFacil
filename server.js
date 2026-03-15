@@ -233,15 +233,15 @@ const norm = s=>s?String(s).trim().toUpperCase():'';
 
 function parseDate(val){
   if(!val) return null;
-  if(typeof val==='number'){const d=new Date(Math.round((val-25569)*86400*1000));const y=d.getUTCFullYear(),m=d.getUTCMonth()+1,day=d.getUTCDate();return `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;}
+  // Excel serial number
+  if(typeof val==='number'&&val>40000){const d=new Date(Math.round((val-25569)*86400*1000));const y=d.getUTCFullYear(),m=d.getUTCMonth()+1,day=d.getUTCDate();return `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;}
   const s=String(val).trim();
-  // DD/MM/YYYY
-  const m1=s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);if(m1)return`${m1[3]}-${m1[2]}-${m1[1]}`;
-  // DD/MM/YY (2-digit year, assume 20xx)
+  // "Seg, 02/03/2026" or bare "02/03/2026" — DD/MM/YYYY (4-digit year)
+  const m1=s.match(/(\d{2})\/(\d{2})\/(\d{4})/);if(m1)return`${m1[3]}-${m1[2]}-${m1[1]}`;
+  // "02/03/26" — DD/MM/YY (2-digit year, assume 20xx)
   const m1b=s.match(/^(\d{2})\/(\d{2})\/(\d{2})$/);if(m1b)return`20${m1b[3]}-${m1b[2]}-${m1b[1]}`;
-  // YYYY-MM-DD
+  // "2026-03-02" or "2026-03-02 00:00:00"
   const m2=s.match(/^(\d{4}-\d{2}-\d{2})/);if(m2)return m2[1];
-  if(s.length>=10&&s[4]==='-')return s.slice(0,10);
   return null;
 }
 function parseTime(val){
