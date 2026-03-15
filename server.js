@@ -235,7 +235,11 @@ function parseDate(val){
   if(!val) return null;
   if(typeof val==='number'){const d=new Date(Math.round((val-25569)*86400*1000));const y=d.getUTCFullYear(),m=d.getUTCMonth()+1,day=d.getUTCDate();return `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;}
   const s=String(val).trim();
-  const m1=s.match(/(\d{2})\/(\d{2})\/(\d{4})/);if(m1)return`${m1[3]}-${m1[2]}-${m1[1]}`;
+  // DD/MM/YYYY
+  const m1=s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);if(m1)return`${m1[3]}-${m1[2]}-${m1[1]}`;
+  // DD/MM/YY (2-digit year, assume 20xx)
+  const m1b=s.match(/^(\d{2})\/(\d{2})\/(\d{2})$/);if(m1b)return`20${m1b[3]}-${m1b[2]}-${m1b[1]}`;
+  // YYYY-MM-DD
   const m2=s.match(/^(\d{4}-\d{2}-\d{2})/);if(m2)return m2[1];
   if(s.length>=10&&s[4]==='-')return s.slice(0,10);
   return null;
@@ -282,18 +286,31 @@ function buildData(pmRaw,prodRaw,servRaw){
     prodByDateTech[date][n]=r;
   });
 
-  // Servicos: first valid service per tech (no date column)
+  // Servicos: group by date+tech, pick Posição em Rota == '1'
+  // Falls back to lowest Início Previsto if no position-1 record exists
   const skipRe=/refeição|refeicao|antecipação|antecipacao|escritório|escritorio/i;
-  const servByTech={};
+  // servByDateTech[date][normName] = row
+  const servByDateTech={};
   servRows.forEach(r=>{
     const n=norm(r['Recurso']);if(!n)return;
     if(skipRe.test(String(r['Tipo de Atividade']||'')))return;
     if(String(r['Status']||'')==='Cancelada')return;
-    const lat=parseFloat(r['Latitude']),lng=parseFloat(r['Longitude']);
-    if(isNaN(lat)||isNaN(lng))return;
-    const mins=parseTime(r['Início Previsto']);
-    if(!servByTech[n]||(mins!==null&&mins<(servByTech[n]._mins??9999)))
-      servByTech[n]={...r,_mins:mins};
+    // Parse date from 'Data Agendada para Execução'
+    const date=parseDate(r['Data Agendada para Execução']);if(!date)return;
+    if(!servByDateTech[date])servByDateTech[date]={};
+    const posStr=String(r['Posição em Rota']??'').trim();
+    const pos=parseInt(posStr);
+    const existing=servByDateTech[date][n];
+    // Prefer Posição em Rota == 1; among ties use lowest Início Previsto
+    if(pos===1){
+      if(!existing||existing._pos!==1)
+        servByDateTech[date][n]={...r,_pos:pos,_mins:parseTime(r['Início Previsto'])};
+    } else if(!existing){
+      const mins=parseTime(r['Início Previsto']);
+      const lat=parseFloat(r['Latitude']),lng=parseFloat(r['Longitude']);
+      if(!isNaN(lat)&&!isNaN(lng))
+        servByDateTech[date][n]={...r,_pos:pos,_mins:mins};
+    }
   });
 
   const result={};
@@ -302,6 +319,7 @@ function buildData(pmRaw,prodRaw,servRaw){
     const supervisorSet=new Set();
     const techs=[];
 
+    const servByTech=servByDateTech[date]||{};
     Object.entries(byTech).forEach(([name,rows])=>{
       const prod=prodByTech[name];
       const serv=servByTech[name];
